@@ -1,22 +1,35 @@
 name: sync
 on:
-  push:
-    branches:
-      - master
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
 jobs:
-  repo-sync:
+  check-and-sync:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
 
-    - name: Sync Repositories
-      uses: repo-sync/github-sync@v2
-      with:
-        source_repo: "https://github.com/different-ai/file-organizer-2000.git"
-        source_branch: "master"
-        destination_branch: "main"
-        github_token: ${{ secrets.PAT }}
-        source_root: "/app"
-        destination_root: "/"
+    - name: Check for updates and sync
+      run: |
+        git remote add source https://github.com/different-ai/file-organizer-2000.git
+        git fetch source master
+        if [ "$(git rev-parse HEAD)" != "$(git rev-parse source/master)" ]; then
+          echo "Changes detected, syncing repositories"
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git checkout -b temp_branch source/master
+          git checkout main
+          git rm -rf .
+          git checkout temp_branch -- app
+          git add .
+          git commit -m "Sync app folder from source repository"
+          git push origin main
+        else
+          echo "No changes detected"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.PAT }}
